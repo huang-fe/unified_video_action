@@ -20,7 +20,7 @@ shape_meta:
       type: rgb
 
 dataset:
-  _target_: unified_video_action.dataset.xhand_dataset.XHandDataset
+  _target_: unified_video_action.env_runner.dummy_runner.DummyRunner # unified_video_action.dataset.xhand_dataset.XHandDataset 
   language_emb_model: null
   horizon: 32
   pad_after: 7
