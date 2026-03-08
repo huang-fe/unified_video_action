@@ -1,5 +1,6 @@
 from typing import Dict
 import torch
+import torch.nn.functional as F
 import numpy as np
 import copy
 from unified_video_action.common.pytorch_util import dict_apply
@@ -27,12 +28,22 @@ class XHandDataset(BaseImageDataset):
         language_emb_model=None,
         normalizer_type=None,
         dataset_type="singletask",
+        image_right_resolution=256,
     ):
         super().__init__()
-
+        self.image_right_resolution = image_right_resolution
         self.replay_buffer = ReplayBuffer.copy_from_path(
             dataset_path,
-            keys=["img", "state", "action"],
+            keys=[
+                "img",
+                "state",
+                "action",
+                "img_right",
+                "ee_left",
+                "ee_right",
+                "q_left",
+                "q_right",
+            ],
         )
         val_mask = get_val_mask(
             n_episodes=self.replay_buffer.n_episodes, val_ratio=val_ratio, seed=seed
@@ -71,10 +82,15 @@ class XHandDataset(BaseImageDataset):
         data = {
             "action": self.replay_buffer["action"],
             "state": self.replay_buffer["state"],
+            "ee_left": self.replay_buffer["ee_left"],
+            "ee_right": self.replay_buffer["ee_right"],
+            "q_left": self.replay_buffer["q_left"],
+            "q_right": self.replay_buffer["q_right"],
         }
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
         normalizer["image"] = get_image_range_normalizer()
+        normalizer["image_right"] = get_image_range_normalizer()
         return normalizer
 
     def __len__(self) -> int:
@@ -86,13 +102,35 @@ class XHandDataset(BaseImageDataset):
         state = sample["state"].astype(np.float32)
         action = sample["action"].astype(np.float32)
 
-        data = {
-            "obs": {
-                "image": image,
-                "state": state,
-            },
-            "action": action,
+        # img_right: (T, H, W, 3) -> (T, 3, res, res), normalized to [0, 1]
+        img_right = sample["img_right"]
+        if (
+            img_right.shape[1] != self.image_right_resolution
+            or img_right.shape[2] != self.image_right_resolution
+        ):
+            th = torch.from_numpy(
+                np.moveaxis(img_right, -1, 1).astype(np.float32) / 255.0
+            )
+            th = F.interpolate(
+                th,
+                size=(self.image_right_resolution, self.image_right_resolution),
+                mode="bilinear",
+                align_corners=False,
+            )
+            image_right = th.numpy()
+        else:
+            image_right = np.moveaxis(img_right, -1, 1).astype(np.float32) / 255.0
+
+        obs = {
+            "image": image,
+            "state": state,
+            "image_right": image_right,
+            "ee_left": sample["ee_left"].astype(np.float32),
+            "ee_right": sample["ee_right"].astype(np.float32),
+            "q_left": sample["q_left"].astype(np.float32),
+            "q_right": sample["q_right"].astype(np.float32),
         }
+        data = {"obs": obs, "action": action}
         return data
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:

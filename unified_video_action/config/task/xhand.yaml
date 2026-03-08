@@ -18,9 +18,31 @@ shape_meta:
       - 96
       - 96
       type: rgb
+    image_right:
+      shape:
+      - 3
+      - 256
+      - 256
+      type: rgb
+    ee_left:
+      shape:
+      - 6
+      type: low_dim
+    ee_right:
+      shape:
+      - 6
+      type: low_dim
+    q_left:
+      shape:
+      - 19
+      type: low_dim
+    q_right:
+      shape:
+      - 19
+      type: low_dim
 
 dataset:
-  _target_: unified_video_action.env_runner.dummy_runner.DummyRunner # unified_video_action.dataset.xhand_dataset.XHandDataset 
+  _target_: unified_video_action.dataset.xhand_dataset.XHandDataset
   language_emb_model: null
   horizon: 32
   pad_after: 7
@@ -28,8 +50,9 @@ dataset:
   seed: 42
   val_ratio: 0.02
   normalizer_type: all
-  dataset_path: /home/huangfe/unified_video_action/data/demo.zarr 
+  dataset_path: /home/huangfe/unified_video_action/data/demo.zarr
   dataset_type: singletask
+  image_right_resolution: 256
 
 env_runner:
   _target_: unified_video_action.env_runner.xhand_image_runner.XHandImageRunner
