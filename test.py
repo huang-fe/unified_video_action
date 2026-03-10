@@ -1,31 +1,19 @@
-# import zarr
-# # import imageio
+import argparse
+from unified_video_action.dataset.teleop_dataset import RealKinovaXHandDataset, RealKinovaSharpaHandDataset
 
-# z = zarr.open("data/raw/demo_umi.zarr", mode="r")
-# print(z.tree())
+DATASET_CLASSES = {
+    "realkinova_xhand": RealKinovaXHandDataset,
+    "realkinova_sharpa_hand": RealKinovaSharpaHandDataset,
+}
 
-# imgs = z["data/img"]
-# print(imgs.shape)
+parser = argparse.ArgumentParser()
+parser.add_argument("--arm-hand", type=str, default="realkinova_xhand", choices=list(DATASET_CLASSES.keys()))
+parser.add_argument("--dataset-path", type=str, default=None)
+args = parser.parse_args()
 
-# imageio.mimsave("demo.mp4", imgs, fps=30,codec="libx264")
-
-# from unified_video_action.dataset.xhand_dataset import XHandDataset
-
-# d = XHandDataset("demo_1772431982_e94f08.zarr")
-
-# print(len(d))
-# print(d[0]["obs"]["img"].shape)
-# print(d[0]["action"].shape)
-
-# loader = d.get_dataloader()
-
-# for batch in loader:
-#     print(batch["obs"]["img"].shape)
-#     break
-
-from unified_video_action.dataset.xhand_dataset import XHandDataset
-
-d = XHandDataset(dataset_path="/home/huangfe/unified_video_action/data/raw/demo.zarr")
+dataset_path = args.dataset_path or f"data/{args.arm_hand}/demo.zarr"
+DatasetClass = DATASET_CLASSES[args.arm_hand]
+d = DatasetClass(dataset_path=dataset_path)
 
 print("len:", len(d))
 sample = d[0]

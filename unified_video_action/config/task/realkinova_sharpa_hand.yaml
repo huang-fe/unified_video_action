@@ -1,4 +1,4 @@
-name: xhand
+name: realkinova_sharpa_hand
 task_type: single_dataset
 task_modes: []
 
@@ -6,11 +6,11 @@ shape_meta:
   image_resolution: 96
   action:
     shape:
-    - 38
+    - 58
   obs:
     state:
       shape:
-      - 38
+      - 58
       type: low_dim
     image:
       shape:
@@ -34,15 +34,15 @@ shape_meta:
       type: low_dim
     q_left:
       shape:
-      - 19
+      - 29
       type: low_dim
     q_right:
       shape:
-      - 19
+      - 29
       type: low_dim
 
 dataset:
-  _target_: unified_video_action.dataset.xhand_dataset.XHandDataset
+  _target_: unified_video_action.dataset.teleop_dataset.RealKinovaSharpaHandDataset
   language_emb_model: null
   horizon: 32
   pad_after: 7
@@ -50,13 +50,14 @@ dataset:
   seed: 42
   val_ratio: 0.02
   normalizer_type: all
-  dataset_path: /home/huangfe/unified_video_action/data/demo.zarr
+  dataset_path: data/realkinova_sharpa_hand/demo.zarr
   dataset_type: singletask
   image_right_resolution: 256
 
 env_runner:
-  _target_: unified_video_action.env_runner.xhand_image_runner.XHandImageRunner
-  dataset_path: /home/huangfe/unified_video_action/data/demo.zarr
+  _target_: unified_video_action.env_runner.teleop_image_runner.TeleopImageRunner
+  arm_hand_name: realkinova_sharpa_hand
+  dataset_path: data/realkinova_sharpa_hand/demo.zarr
   fps: 10
   max_steps: 227
   n_action_steps: 8

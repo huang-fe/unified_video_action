@@ -1,8 +1,16 @@
+import argparse
 import zarr
 import torch
 import numpy as np
 
-z = zarr.open("demo_1772431982_e94f08.zarr", "r")
+parser = argparse.ArgumentParser()
+parser.add_argument("--arm-hand", type=str, default="realkinova_xhand",
+                    choices=["realkinova_xhand", "realkinova_sharpa_hand"])
+parser.add_argument("--zarr-path", type=str, default="demo_1772431982_e94f08.zarr")
+parser.add_argument("--checkpoint", type=str, default="checkpoints/libero10.ckpt")
+args = parser.parse_args()
+
+z = zarr.open(args.zarr_path, "r")
 
 imgs = z["data/img"][:]        # (T,H,W,C)
 
@@ -22,7 +30,7 @@ from omegaconf import OmegaConf
 import torch
 from unified_video_action.policy.unified_video_action_policy import UnifiedVideoActionPolicy
 
-ckpt = torch.load("checkpoints/libero10.ckpt", map_location="cpu")
+ckpt = torch.load(args.checkpoint, map_location="cpu")
 # print(ckpt["state_dicts"].keys())
 policy_cfg = ckpt["cfg"]["model"]["policy"]
 
@@ -76,7 +84,7 @@ plt.plot(gt, label="gt")
 plt.plot(pred, label="pred")
 plt.legend()
 
-fig.savefig("/home/huangfe/actions_plot.png", dpi=300, bbox_inches="tight")
+fig.savefig("actions_plot.png", dpi=300, bbox_inches="tight")
 plt.close(fig)
 
 mse = np.mean((gt - pred)**2)

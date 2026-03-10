@@ -1,8 +1,10 @@
+import os
 from typing import Dict
 import torch
 import torch.nn.functional as F
 import numpy as np
 import copy
+from omegaconf import OmegaConf
 from unified_video_action.common.pytorch_util import dict_apply
 from unified_video_action.common.replay_buffer import ReplayBuffer
 from unified_video_action.common.sampler import (
@@ -15,7 +17,16 @@ from unified_video_action.dataset.base_dataset import BaseImageDataset
 from unified_video_action.common.normalize_util import get_image_range_normalizer
 
 
-class XHandDataset(BaseImageDataset):
+def load_arm_hand_config(arm_hand_name):
+    config_path = os.path.join(
+        os.path.dirname(__file__), "..", "config", "arm_hand", f"{arm_hand_name}.yaml"
+    )
+    return OmegaConf.load(config_path)
+
+
+class TeleopDataset(BaseImageDataset):
+    arm_hand_name: str = None  # defined in subclasses
+
     def __init__(
         self,
         dataset_path,
@@ -28,30 +39,24 @@ class XHandDataset(BaseImageDataset):
         language_emb_model=None,
         normalizer_type=None,
         dataset_type="singletask",
-        image_right_resolution=256,
+        arm_hand_name=None,
     ):
         super().__init__()
-        self.image_right_resolution = image_right_resolution
+        if arm_hand_name is not None:
+            self.arm_hand_name = arm_hand_name
+        assert self.arm_hand_name is not None, "arm_hand_name must be set"
+        self.cfg = load_arm_hand_config(self.arm_hand_name)
+        self.image_right_resolution = self.cfg.image_right_resolution
+
         self.replay_buffer = ReplayBuffer.copy_from_path(
             dataset_path,
-            keys=[
-                "img",
-                "state",
-                "action",
-                "img_right",
-                "ee_left",
-                "ee_right",
-                "q_left",
-                "q_right",
-            ],
+            keys=["img", "state", "action", "img_right", "ee_left", "ee_right", "q_left", "q_right"],
         )
         val_mask = get_val_mask(
             n_episodes=self.replay_buffer.n_episodes, val_ratio=val_ratio, seed=seed
         )
         train_mask = ~val_mask
-        train_mask = downsample_mask(
-            mask=train_mask, max_n=max_train_episodes, seed=seed
-        )
+        train_mask = downsample_mask(mask=train_mask, max_n=max_train_episodes, seed=seed)
 
         self.sampler = SequenceSampler(
             replay_buffer=self.replay_buffer,
@@ -97,20 +102,16 @@ class XHandDataset(BaseImageDataset):
         return len(self.sampler)
 
     def _sample_to_data(self, sample):
-        # img: (T, 96, 96, 3) -> (T, 3, 96, 96), normalized to [0, 1]
         image = np.moveaxis(sample["img"], -1, 1).astype(np.float32) / 255.0
         state = sample["state"].astype(np.float32)
         action = sample["action"].astype(np.float32)
 
-        # img_right: (T, H, W, 3) -> (T, 3, res, res), normalized to [0, 1]
         img_right = sample["img_right"]
         if (
             img_right.shape[1] != self.image_right_resolution
             or img_right.shape[2] != self.image_right_resolution
         ):
-            th = torch.from_numpy(
-                np.moveaxis(img_right, -1, 1).astype(np.float32) / 255.0
-            )
+            th = torch.from_numpy(np.moveaxis(img_right, -1, 1).astype(np.float32) / 255.0)
             th = F.interpolate(
                 th,
                 size=(self.image_right_resolution, self.image_right_resolution),
@@ -130,11 +131,17 @@ class XHandDataset(BaseImageDataset):
             "q_left": sample["q_left"].astype(np.float32),
             "q_right": sample["q_right"].astype(np.float32),
         }
-        data = {"obs": obs, "action": action}
-        return data
+        return {"obs": obs, "action": action}
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
-        torch_data = dict_apply(data, torch.from_numpy)
-        return torch_data
+        return dict_apply(data, torch.from_numpy)
+
+
+class RealKinovaXHandDataset(TeleopDataset):
+    arm_hand_name = "realkinova_xhand"
+
+
+class RealKinovaSharpaHandDataset(TeleopDataset):
+    arm_hand_name = "realkinova_sharpa_hand"

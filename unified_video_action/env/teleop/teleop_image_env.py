@@ -1,6 +1,6 @@
 """
-XHand image env that plays back episodes from a zarr dataset.
-Used for evaluation when no simulator is available.
+Teleop image env to play back episodes from zarr dataset.
+Modular design compatible with any arm+hand config.
 """
 
 import os
@@ -8,44 +8,46 @@ import gym
 from gym import spaces
 import numpy as np
 import zarr
+from unified_video_action.dataset.teleop_dataset import load_arm_hand_config
 
 
-class XHandImageEnv(gym.Env):
+class TeleopImageEnv(gym.Env):
     metadata = {"render.modes": ["rgb_array"], "video.frames_per_second": 10}
 
-    def __init__(self, dataset_path, render_size=96):
+    def __init__(self, dataset_path, arm_hand_name, render_size=96):
         super().__init__()
         self._seed = None
         self.seed()
         self.render_size = render_size
         self.dataset_path = os.path.expanduser(dataset_path)
+        self.cfg = load_arm_hand_config(arm_hand_name)
         self._root = None
         self._episode_ends = None
         self._n_episodes = None
         self._load_meta()
 
-        self.observation_space = spaces.Dict(
-            {
-                "image": spaces.Box(
-                    low=0.0,
-                    high=1.0,
-                    shape=(3, render_size, render_size),
-                    dtype=np.float32,
-                ),
-                "state": spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(38,), dtype=np.float32
-                ),
-            }
-        )
+        self.observation_space = spaces.Dict({
+            "image": spaces.Box(
+                low=0.0, high=1.0,
+                shape=(3, render_size, render_size),
+                dtype=np.float32,
+            ),
+            "state": spaces.Box(
+                low=-np.inf, high=np.inf,
+                shape=(self.cfg.state_dim,),
+                dtype=np.float32,
+            ),
+        })
         self.action_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(38,), dtype=np.float32
+            low=-np.inf, high=np.inf,
+            shape=(self.cfg.action_dim,),
+            dtype=np.float32,
         )
         self.reward_range = (0.0, 1.0)
 
-        # Current episode data (loaded on reset)
-        self._img = None  # (T, H, W, 3) uint8
-        self._state = None  # (T, 38)
-        self._action = None  # (T, 38)
+        self._img = None
+        self._state = None
+        self._action = None
         self._t = 0
         self._T = 0
 
@@ -65,32 +67,24 @@ class XHandImageEnv(gym.Env):
         episode_idx = (self._seed if self._seed is not None else 0) % self._n_episodes
         start = 0 if episode_idx == 0 else int(self._episode_ends[episode_idx - 1])
         end = int(self._episode_ends[episode_idx])
-        T = end - start
 
         data = self._root["data"]
-        self._img = np.array(data["img"][start:end])  # (T, H, W, 3)
+        self._img = np.array(data["img"][start:end])
         self._state = np.array(data["state"][start:end], dtype=np.float32)
         self._action = np.array(data["action"][start:end], dtype=np.float32)
         self._t = 0
-        self._T = T
+        self._T = end - start
 
-        obs = self._get_obs(0)
-        return obs
+        return self._get_obs(0)
 
     def step(self, action):
         self._t += 1
         done = self._t >= self._T
-        if done:
-            obs = self._get_obs(self._t - 1)
-        else:
-            obs = self._get_obs(self._t)
-        reward = 0.0
-        info = {}
-        return obs, reward, done, info
+        obs = self._get_obs(self._t - 1 if done else self._t)
+        return obs, 0.0, done, {}
 
     def _get_obs(self, t):
-        img = self._img[t]
-        image = np.moveaxis(img.astype(np.float32) / 255.0, -1, 0)
+        image = np.moveaxis(self._img[t].astype(np.float32) / 255.0, -1, 0)
         state = self._state[t].astype(np.float32)
         return {"image": image, "state": state}
 
@@ -102,7 +96,5 @@ class XHandImageEnv(gym.Env):
         frame = self._img[t]
         if frame.shape[0] != self.render_size or frame.shape[1] != self.render_size:
             import cv2
-            frame = cv2.resize(
-                frame, (self.render_size, self.render_size), interpolation=cv2.INTER_LINEAR
-            )
+            frame = cv2.resize(frame, (self.render_size, self.render_size), interpolation=cv2.INTER_LINEAR)
         return frame

@@ -2,7 +2,7 @@ name: uva
 
 defaults:
   - _self_
-  - task: xhand
+  - task: realkinova_sharpa_hand
   - model: uva
 
 dataloader:
@@ -37,7 +37,7 @@ training:
   use_ema: true
   val_every: 1
   mixed_precision: 'fp16'
-  
+
 checkpoint:
   save_last_ckpt: true
   save_last_snapshot: false
@@ -59,14 +59,14 @@ logging:
   group: null
   id: null
   mode: online
-  name: train_uva_xhand
+  name: train_uva_realkinova_sharpa_hand
   project: unified_video_action
   resume: true
   tags:
-  - train_uva_xhand
-  - xhand
+  - train_uva_realkinova_sharpa_hand
+  - realkinova_sharpa_hand
   - default
 
 multi_run:
-  run_dir: data/outputs/train_uva_xhand
-  wandb_name_base: train_uva_xhand
+  run_dir: data/outputs/train_uva_realkinova_sharpa_hand
+  wandb_name_base: train_uva_realkinova_sharpa_hand

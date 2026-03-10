@@ -1,0 +1,11 @@
+arm: realkinova
+hand: sharpa_hand
+arm_dof: 7
+hand_dof: 22
+num_arms: 2
+q_dim_per_side: 29  # arm+hand dofs
+action_dim: 58
+state_dim: 58
+ee_dim: 6
+image_resolution: 96
+image_right_resolution: 256

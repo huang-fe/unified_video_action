@@ -7,7 +7,7 @@ import tqdm
 import dill
 import math
 import wandb.sdk.data_types.video as wv
-from unified_video_action.env.xhand.xhand_image_env import XHandImageEnv
+from unified_video_action.env.teleop.teleop_image_env import TeleopImageEnv
 from unified_video_action.gym_util.async_vector_env import AsyncVectorEnv
 from unified_video_action.gym_util.multistep_wrapper import MultiStepWrapper
 from unified_video_action.gym_util.video_recording_wrapper import (
@@ -19,11 +19,12 @@ from unified_video_action.common.pytorch_util import dict_apply
 from unified_video_action.env_runner.base_image_runner import BaseImageRunner
 
 
-class XHandImageRunner(BaseImageRunner):
+class TeleopImageRunner(BaseImageRunner):
     def __init__(
         self,
         output_dir,
         dataset_path,
+        arm_hand_name,
         n_train=10,
         n_train_vis=3,
         train_start_seed=0,
@@ -49,8 +50,9 @@ class XHandImageRunner(BaseImageRunner):
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    XHandImageEnv(
+                    TeleopImageEnv(
                         dataset_path=dataset_path,
+                        arm_hand_name=arm_hand_name,
                         render_size=render_size,
                     ),
                     video_recoder=VideoRecorder.create_h264(
@@ -73,7 +75,7 @@ class XHandImageRunner(BaseImageRunner):
         env_seeds = list()
         env_prefixs = list()
         env_init_fn_dills = list()
-        # train
+
         for i in range(n_train):
             seed = train_start_seed + i
             enable_render = i < n_train_vis
@@ -87,8 +89,7 @@ class XHandImageRunner(BaseImageRunner):
                         "media", wv.util.generate_id() + ".mp4"
                     )
                     filename.parent.mkdir(parents=False, exist_ok=True)
-                    filename = str(filename)
-                    env.env.file_path = filename
+                    env.env.file_path = str(filename)
                 assert isinstance(env, MultiStepWrapper)
                 env.seed(seed)
 
@@ -96,7 +97,6 @@ class XHandImageRunner(BaseImageRunner):
             env_prefixs.append("train/")
             env_init_fn_dills.append(dill.dumps(init_fn))
 
-        # test
         for i in range(n_test):
             seed = test_start_seed + i
             enable_render = i < n_test_vis
@@ -110,8 +110,7 @@ class XHandImageRunner(BaseImageRunner):
                         "media", wv.util.generate_id() + ".mp4"
                     )
                     filename.parent.mkdir(parents=False, exist_ok=True)
-                    filename = str(filename)
-                    env.env.file_path = filename
+                    env.env.file_path = str(filename)
                 assert isinstance(env, MultiStepWrapper)
                 env.seed(seed)
 
@@ -159,55 +158,43 @@ class XHandImageRunner(BaseImageRunner):
             assert len(this_init_fns) == n_envs
 
             env.call_each("run_dill_function", args_list=[(x,) for x in this_init_fns])
-
             obs = env.reset()
-
             past_action_list = []
             policy.reset()
 
             pbar = tqdm.tqdm(
                 total=self.max_steps,
-                desc=f"Eval XHandImageRunner {chunk_idx+1}/{n_chunks}",
+                desc=f"Eval TeleopImageRunner {chunk_idx+1}/{n_chunks}",
                 leave=False,
                 mininterval=self.tqdm_interval_sec,
             )
             done = False
             while not done:
                 np_obs_dict = dict(obs)
-
-                if self.past_action:
-                    if len(past_action_list) > 1:
-                        np_obs_dict["past_action"] = np.concatenate(
-                            past_action_list, axis=1
-                        )
+                if self.past_action and len(past_action_list) > 1:
+                    np_obs_dict["past_action"] = np.concatenate(past_action_list, axis=1)
 
                 obs_dict = dict_apply(
                     np_obs_dict, lambda x: torch.from_numpy(x).to(device=device)
                 )
-
                 with torch.no_grad():
                     action_dict = policy.predict_action(obs_dict, **kwargs)
 
                 np_action_dict = dict_apply(
                     action_dict, lambda x: x.detach().to("cpu").numpy()
                 )
-
                 action = np_action_dict["action"]
-
                 obs, reward, done, info = env.step(action)
                 done = np.all(done)
 
                 past_action_list.append(action)
                 if len(past_action_list) > 2:
                     past_action_list.pop(0)
-
                 pbar.update(action.shape[1])
             pbar.close()
 
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
-            all_rewards[this_global_slice] = env.call("get_attr", "reward")[
-                this_local_slice
-            ]
+            all_rewards[this_global_slice] = env.call("get_attr", "reward")[this_local_slice]
         _ = env.reset()
 
         max_rewards = collections.defaultdict(list)
@@ -218,15 +205,11 @@ class XHandImageRunner(BaseImageRunner):
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
             log_data[prefix + f"sim_max_reward_{seed}"] = max_reward
-
             video_path = all_video_paths[i]
             if video_path is not None:
-                sim_video = wandb.Video(video_path)
-                log_data[prefix + f"sim_video_{seed}"] = sim_video
+                log_data[prefix + f"sim_video_{seed}"] = wandb.Video(video_path)
 
         for prefix, value in max_rewards.items():
-            name = prefix + "mean_score"
-            value = np.mean(value)
-            log_data[name] = value
+            log_data[prefix + "mean_score"] = np.mean(value)
 
         return log_data
