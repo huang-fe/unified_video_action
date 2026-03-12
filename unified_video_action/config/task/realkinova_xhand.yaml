@@ -3,7 +3,7 @@ task_type: single_dataset
 task_modes: []
 
 shape_meta:
-  image_resolution: 96
+  image_resolution: 256
   action:
     shape:
     - 38
@@ -15,8 +15,8 @@ shape_meta:
     image:
       shape:
       - 3
-      - 96
-      - 96
+      - 256
+      - 256
       type: rgb
     image_right:
       shape:
@@ -50,7 +50,10 @@ dataset:
   seed: 42
   val_ratio: 0.02
   normalizer_type: all
-  dataset_path: data/realkinova_xhand/demo.zarr
+  dataset_path: data/robot
+  human_dataset_path: data/human
+  p_robot: 1.0
+  p_human: 0.0
   dataset_type: singletask
   image_right_resolution: 256
 

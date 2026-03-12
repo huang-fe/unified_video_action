@@ -4,11 +4,24 @@ Modular design compatible with any arm+hand config.
 """
 
 import os
+import cv2
 import gym
 from gym import spaces
 import numpy as np
 import zarr
 from unified_video_action.dataset.teleop_dataset import load_arm_hand_config
+
+
+# center crop + resize helper
+def _center_crop_resize_hwc(img_hwc: np.ndarray, target: int) -> np.ndarray:
+    h, w = img_hwc.shape[:2]
+    s = min(h, w)
+    top = (h - s) // 2
+    left = (w - s) // 2
+    cropped = img_hwc[top:top + s, left:left + s]
+    if s != target:
+        cropped = cv2.resize(cropped, (target, target), interpolation=cv2.INTER_LINEAR)
+    return cropped
 
 
 class TeleopImageEnv(gym.Env):
@@ -18,7 +31,6 @@ class TeleopImageEnv(gym.Env):
         super().__init__()
         self._seed = None
         self.seed()
-        self.render_size = render_size
         self.dataset_path = os.path.expanduser(dataset_path)
         self.cfg = load_arm_hand_config(arm_hand_name)
         self._root = None
@@ -26,18 +38,22 @@ class TeleopImageEnv(gym.Env):
         self._n_episodes = None
         self._load_meta()
 
-        self.observation_space = spaces.Dict({
-            "image": spaces.Box(
-                low=0.0, high=1.0,
-                shape=(3, render_size, render_size),
-                dtype=np.float32,
-            ),
-            "state": spaces.Box(
-                low=-np.inf, high=np.inf,
-                shape=(self.cfg.state_dim,),
-                dtype=np.float32,
-            ),
-        })
+        self._use_img_right = hasattr(self.cfg, "image_right_resolution")
+        self._use_per_arm_proprio = hasattr(self.cfg, "q_dim_per_side")
+
+        self.render_size = self.cfg.image_right_resolution if self._use_img_right else render_size
+
+        obs_spaces = {
+            "image": spaces.Box(low=0.0, high=1.0, shape=(3, self.render_size, self.render_size), dtype=np.float32),
+            "state": spaces.Box(low=-np.inf, high=np.inf, shape=(self.cfg.state_dim,), dtype=np.float32),
+        }
+        if self._use_per_arm_proprio:
+            obs_spaces["ee_left"] = spaces.Box(low=-np.inf, high=np.inf, shape=(self.cfg.ee_dim,), dtype=np.float32)
+            obs_spaces["ee_right"] = spaces.Box(low=-np.inf, high=np.inf, shape=(self.cfg.ee_dim,), dtype=np.float32)
+            obs_spaces["q_left"] = spaces.Box(low=-np.inf, high=np.inf, shape=(self.cfg.q_dim_per_side,), dtype=np.float32)
+            obs_spaces["q_right"] = spaces.Box(low=-np.inf, high=np.inf, shape=(self.cfg.q_dim_per_side,), dtype=np.float32)
+        self.observation_space = spaces.Dict(obs_spaces)
+
         self.action_space = spaces.Box(
             low=-np.inf, high=np.inf,
             shape=(self.cfg.action_dim,),
@@ -48,6 +64,7 @@ class TeleopImageEnv(gym.Env):
         self._img = None
         self._state = None
         self._action = None
+        self._ee_left = self._ee_right = self._q_left = self._q_right = None
         self._t = 0
         self._T = 0
 
@@ -69,9 +86,15 @@ class TeleopImageEnv(gym.Env):
         end = int(self._episode_ends[episode_idx])
 
         data = self._root["data"]
-        self._img = np.array(data["img"][start:end])
+        img_key = "img_right" if self._use_img_right else "img"
+        self._img = np.array(data[img_key][start:end])
         self._state = np.array(data["state"][start:end], dtype=np.float32)
         self._action = np.array(data["action"][start:end], dtype=np.float32)
+        if self._use_per_arm_proprio:
+            self._ee_left = np.array(data["ee_left"][start:end], dtype=np.float32)
+            self._ee_right = np.array(data["ee_right"][start:end], dtype=np.float32)
+            self._q_left = np.array(data["q_left"][start:end], dtype=np.float32)
+            self._q_right = np.array(data["q_right"][start:end], dtype=np.float32)
         self._t = 0
         self._T = end - start
 
@@ -84,9 +107,17 @@ class TeleopImageEnv(gym.Env):
         return obs, 0.0, done, {}
 
     def _get_obs(self, t):
-        image = np.moveaxis(self._img[t].astype(np.float32) / 255.0, -1, 0)
-        state = self._state[t].astype(np.float32)
-        return {"image": image, "state": state}
+        frame = self._img[t]
+        if self._use_img_right:
+            frame = _center_crop_resize_hwc(frame, self.render_size)
+        image = np.moveaxis(frame.astype(np.float32) / 255.0, -1, 0)
+        obs = {"image": image, "state": self._state[t]}
+        if self._use_per_arm_proprio:
+            obs["ee_left"] = self._ee_left[t]
+            obs["ee_right"] = self._ee_right[t]
+            obs["q_left"] = self._q_left[t]
+            obs["q_right"] = self._q_right[t]
+        return obs
 
     def render(self, mode="rgb_array"):
         assert mode == "rgb_array"
@@ -94,7 +125,8 @@ class TeleopImageEnv(gym.Env):
             return np.zeros((self.render_size, self.render_size, 3), dtype=np.uint8)
         t = min(self._t, self._T - 1)
         frame = self._img[t]
-        if frame.shape[0] != self.render_size or frame.shape[1] != self.render_size:
-            import cv2
+        if self._use_img_right:
+            frame = _center_crop_resize_hwc(frame, self.render_size)
+        elif frame.shape[0] != self.render_size or frame.shape[1] != self.render_size:
             frame = cv2.resize(frame, (self.render_size, self.render_size), interpolation=cv2.INTER_LINEAR)
         return frame

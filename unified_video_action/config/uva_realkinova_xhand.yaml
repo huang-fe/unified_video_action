@@ -5,6 +5,11 @@ defaults:
   - task: realkinova_xhand
   - model: uva
 
+policy:
+  use_proprioception: true
+  predict_proprioception: true
+  predict_wrist_img: false
+
 dataloader:
   batch_size: 1 #32
   num_workers: 8
