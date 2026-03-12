@@ -5,12 +5,11 @@ import os
 from typing import List
 
 import numpy as np
-import torch
-import torch.nn.functional as F
 from omegaconf import OmegaConf
 from PIL import Image
 
 from unified_video_action.common.replay_buffer import ReplayBuffer
+from unified_video_action.utils.teleop_utils import center_crop_resize_batch
 
 
 def load_arm_hand_config(arm_hand_name):
@@ -18,19 +17,6 @@ def load_arm_hand_config(arm_hand_name):
         os.path.dirname(__file__), "..", "..", "config", "arm_hand", f"{arm_hand_name}.yaml"
     )
     return OmegaConf.load(config_path)
-
-
-def center_crop_resize(arr: np.ndarray, target_hw: int) -> np.ndarray:
-    if arr.shape[1] == target_hw and arr.shape[2] == target_hw:
-        return arr
-    T, H, W, C = arr.shape
-    crop = min(H, W)
-    top = (H - crop) // 2
-    left = (W - crop) // 2
-    arr = arr[:, top:top + crop, left:left + crop, :]
-    th = torch.from_numpy(arr.astype(np.float32)).permute(0, 3, 1, 2)  # (T,C,H,W)
-    th = F.interpolate(th, size=(target_hw, target_hw), mode="bilinear", align_corners=False)
-    return th.permute(0, 2, 3, 1).numpy().astype(np.uint8)
 
 
 # human data helpers

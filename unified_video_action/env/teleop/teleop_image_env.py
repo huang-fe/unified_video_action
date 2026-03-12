@@ -4,24 +4,12 @@ Modular design compatible with any arm+hand config.
 """
 
 import os
-import cv2
 import gym
 from gym import spaces
 import numpy as np
 import zarr
 from unified_video_action.dataset.utils.teleop_dataset_utils import load_arm_hand_config
-
-
-# center crop + resize helper
-def _center_crop_resize_hwc(img_hwc: np.ndarray, target: int) -> np.ndarray:
-    h, w = img_hwc.shape[:2]
-    s = min(h, w)
-    top = (h - s) // 2
-    left = (w - s) // 2
-    cropped = img_hwc[top:top + s, left:left + s]
-    if s != target:
-        cropped = cv2.resize(cropped, (target, target), interpolation=cv2.INTER_LINEAR)
-    return cropped
+from unified_video_action.utils.teleop_utils import center_crop_resize
 
 
 class TeleopImageEnv(gym.Env):
@@ -109,7 +97,7 @@ class TeleopImageEnv(gym.Env):
     def _get_obs(self, t):
         frame = self._img[t]
         if self._use_img_right:
-            frame = _center_crop_resize_hwc(frame, self.render_size)
+            frame = center_crop_resize(frame, self.render_size)
         image = np.moveaxis(frame.astype(np.float32) / 255.0, -1, 0)
         obs = {"image": image, "state": self._state[t]}
         if self._use_per_arm_proprio:
@@ -126,7 +114,7 @@ class TeleopImageEnv(gym.Env):
         t = min(self._t, self._T - 1)
         frame = self._img[t]
         if self._use_img_right:
-            frame = _center_crop_resize_hwc(frame, self.render_size)
+            frame = center_crop_resize(frame, self.render_size)
         elif frame.shape[0] != self.render_size or frame.shape[1] != self.render_size:
             frame = cv2.resize(frame, (self.render_size, self.render_size), interpolation=cv2.INTER_LINEAR)
         return frame
