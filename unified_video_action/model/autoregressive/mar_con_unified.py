@@ -137,6 +137,16 @@ class MAR(nn.Module):
                 self.proprioception_proj_cond = nn.Linear(
                     2, encoder_embed_dim, bias=True
                 )
+            elif "realkinova_xhand" in self.task_name:
+                # state(38), ee_left(6), ee_right(6), q_left(19), q_right(19) = 88
+                self.proprioception_proj_cond = nn.Linear(
+                    88, encoder_embed_dim, bias=True
+                )
+            elif "realkinova_sharpa_hand" in self.task_name:
+                # state(58), ee_left(6), ee_right(6), q_left(29), q_right(29) = 128
+                self.proprioception_proj_cond = nn.Linear(
+                    128, encoder_embed_dim, bias=True
+                )
             else:
                 self.proprioception_proj_cond = nn.Linear(
                     9, encoder_embed_dim, bias=True
@@ -175,8 +185,10 @@ class MAR(nn.Module):
                     self.task_name == "umi"
                     or "block_push" in self.task_name
                     or "pusht" in self.task_name
+                    or "realkinova_xhand" in self.task_name
+                    or "realkinova_sharpa_hand" in self.task_name
                 ):
-                    proj_cond_x_dim_num += 1
+                    proj_cond_x_dim_num += 1  # state only, no wrist image
                 else:
                     proj_cond_x_dim_num += 2
             if self.use_history_action:
@@ -330,6 +342,36 @@ class MAR(nn.Module):
             elif self.task_name == 'toolhang':
                 self.diffproploss = DiffActLoss(
                         target_channels=9,
+                        z_channels=decoder_embed_dim,
+                        width=diffloss_act_w,
+                        depth=diffloss_act_d,
+                        num_sampling_steps=num_sampling_steps,
+                        grad_checkpointing=grad_checkpointing,
+                        n_frames=self.n_frames,
+                        act_model_type=action_model_params["act_model_type"],
+                        act_diff_training_steps=act_diff_training_steps,
+                        act_diff_testing_steps=act_diff_testing_steps,
+                        language_emb_model=self.language_emb_model,
+                        language_emb_model_type=self.language_emb_model_type,
+                    )
+            elif "realkinova_xhand" in self.task_name:
+                self.diffproploss = DiffActLoss(
+                        target_channels=88,
+                        z_channels=decoder_embed_dim,
+                        width=diffloss_act_w,
+                        depth=diffloss_act_d,
+                        num_sampling_steps=num_sampling_steps,
+                        grad_checkpointing=grad_checkpointing,
+                        n_frames=self.n_frames,
+                        act_model_type=action_model_params["act_model_type"],
+                        act_diff_training_steps=act_diff_training_steps,
+                        act_diff_testing_steps=act_diff_testing_steps,
+                        language_emb_model=self.language_emb_model,
+                        language_emb_model_type=self.language_emb_model_type,
+                    )
+            elif "realkinova_sharpa_hand" in self.task_name:
+                self.diffproploss = DiffActLoss(
+                        target_channels=128,
                         z_channels=decoder_embed_dim,
                         width=diffloss_act_w,
                         depth=diffloss_act_d,
@@ -541,6 +583,28 @@ class MAR(nn.Module):
                         self.buffer_size_properception, dim=1
                     )
                 )
+            elif (
+                "realkinova_xhand" in self.task_name
+                or "realkinova_sharpa_hand" in self.task_name
+            ):
+                proprioception_state_cond = torch.cat(
+                    [
+                        proprioception_input["state"],
+                        proprioception_input["ee_left"],
+                        proprioception_input["ee_right"],
+                        proprioception_input["q_left"],
+                        proprioception_input["q_right"],
+                    ],
+                    dim=-1,
+                )
+                proprioception_state_cond = self.proprioception_proj_cond(
+                    proprioception_state_cond.float()
+                )
+                proprioception_state_cond_expand = (
+                    proprioception_state_cond.repeat_interleave(
+                        self.buffer_size_properception, dim=1
+                    )
+                )
             else:
                 proprioception_image_cond = self.proprioception_image_proj_cond(
                     proprioception_input["second_image_z"]
@@ -593,7 +657,11 @@ class MAR(nn.Module):
             parts.append(action_latents_expand)
 
             if self.use_proprioception:
-                if self.task_name == "umi":
+                if (
+                    self.task_name == "umi"
+                    or "realkinova_xhand" in self.task_name
+                    or "realkinova_sharpa_hand" in self.task_name
+                ):
                     parts.append(proprioception_state_cond_expand)
                 else:
                     parts.extend(
@@ -891,10 +959,21 @@ class MAR(nn.Module):
                     "robot0_eef_rot_axis_angle_wrt_start_pred"
                 ]
             elif self.task_name == "toolhang":
-                gt_properception = torch.cat([proprioception_input['robot0_eef_pos_pred'], 
-                                              proprioception_input['robot0_eef_quat_pred'], 
-                                              proprioception_input['robot0_gripper_qpos_pred']], 
+                gt_properception = torch.cat([proprioception_input['robot0_eef_pos_pred'],
+                                              proprioception_input['robot0_eef_quat_pred'],
+                                              proprioception_input['robot0_gripper_qpos_pred']],
                                              dim=-1)
+            elif (
+                "realkinova_xhand" in self.task_name
+                or "realkinova_sharpa_hand" in self.task_name
+            ):
+                gt_properception = torch.cat([
+                    proprioception_input["state_pred"],
+                    proprioception_input["ee_left_pred"],
+                    proprioception_input["ee_right_pred"],
+                    proprioception_input["q_left_pred"],
+                    proprioception_input["q_right_pred"],
+                ], dim=-1)
             else:
                 raise NotImplementedError
 

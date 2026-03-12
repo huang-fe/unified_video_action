@@ -9,7 +9,7 @@ import gym
 from gym import spaces
 import numpy as np
 import zarr
-from unified_video_action.dataset.teleop_dataset import load_arm_hand_config
+from unified_video_action.dataset.utils.teleop_dataset_utils import load_arm_hand_config
 
 
 # center crop + resize helper

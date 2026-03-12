@@ -4,6 +4,7 @@ Training:
 python train.py --config-name=train_diffusion_lowdim_workspace
 """
 
+import argparse
 import torch
 import os
 import sys
@@ -60,7 +61,29 @@ def main(cfg: OmegaConf):
     workspace.run()
 
 
+def _inject_custom_args():
+    """Extract custom args before Hydra parses sys.argv, re-inject as Hydra overrides.
+
+    Usage: python train.py --config-name uva_realkinova_xhand --p_robot 0.7 --p_human 0.3 --human_dataset_path data/human
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--p_robot", type=float, default=None)
+    parser.add_argument("--p_human", type=float, default=None)
+    parser.add_argument("--human_dataset_path", type=str, default=None)
+    known, remaining = parser.parse_known_args()
+    sys.argv = [sys.argv[0]] + remaining
+
+    if known.p_robot is not None:
+        sys.argv.append(f"task.dataset.p_robot={known.p_robot}")
+    if known.p_human is not None:
+        sys.argv.append(f"task.dataset.p_human={known.p_human}")
+    if known.human_dataset_path is not None:
+        sys.argv.append(f"task.dataset.human_dataset_path={known.human_dataset_path}")
+
+
 if __name__ == "__main__":
+    _inject_custom_args()
+
     print(sys.argv)
     for arg in sys.argv:
         if "local_rank" in arg:  # For deepspeed compatibility

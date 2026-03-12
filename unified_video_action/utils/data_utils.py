@@ -359,6 +359,37 @@ def process_data(batch, task_name="", eval=False, **kwargs):
                 "robot0_eef_rot_axis_angle_wrt_start_pred": robot0_eef_rot_axis_angle_wrt_start_pred,
             }
 
+        elif (
+            "realkinova_xhand" in task_name
+            or "realkinova_sharpa_hand" in task_name
+        ):
+            if train:
+                state, state_pred = torch.chunk(batch["obs"]["state"], 2, dim=1)
+                ee_left, ee_left_pred = torch.chunk(batch["obs"]["ee_left"], 2, dim=1)
+                ee_right, ee_right_pred = torch.chunk(batch["obs"]["ee_right"], 2, dim=1)
+                q_left, q_left_pred = torch.chunk(batch["obs"]["q_left"], 2, dim=1)
+                q_right, q_right_pred = torch.chunk(batch["obs"]["q_right"], 2, dim=1)
+            else:
+                state = batch["obs"]["state"]
+                ee_left = batch["obs"]["ee_left"]
+                ee_right = batch["obs"]["ee_right"]
+                q_left = batch["obs"]["q_left"]
+                q_right = batch["obs"]["q_right"]
+                state_pred = ee_left_pred = ee_right_pred = q_left_pred = q_right_pred = None
+
+            proprioception_input = {
+                "state": state,
+                "ee_left": ee_left,
+                "ee_right": ee_right,
+                "q_left": q_left,
+                "q_right": q_right,
+                "state_pred": state_pred,
+                "ee_left_pred": ee_left_pred,
+                "ee_right_pred": ee_right_pred,
+                "q_left_pred": q_left_pred,
+                "q_right_pred": q_right_pred,
+            }
+
     else:
         proprioception_input = None
 

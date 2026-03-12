@@ -132,7 +132,10 @@ class TrainUnifiedVideoActionWorkspace(BaseWorkspace):
             # configure dataset
             dataset: BaseImageDataset
             dataset = hydra.utils.instantiate(cfg.task.dataset)
-            train_dataloader = DataLoader(dataset, **cfg.dataloader)
+            if hasattr(dataset, "get_dataloader"):
+                train_dataloader = dataset.get_dataloader(**cfg.dataloader)
+            else:
+                train_dataloader = DataLoader(dataset, **cfg.dataloader)
 
             # configure validation dataset
             val_dataset = dataset.get_validation_dataset()
