@@ -41,13 +41,14 @@ class TeleopDataset(BaseImageDataset):
         human_dataset_path: Optional[str] = None,
         p_robot: float = 1.0,
         p_human: float = 0.0,
+        image_right_resolution=None,
     ):
         super().__init__()
         if arm_hand_name is not None:
             self.arm_hand_name = arm_hand_name
         assert self.arm_hand_name is not None, "arm_hand_name must be set"
         self.cfg = load_arm_hand_config(self.arm_hand_name)
-        self.image_right_resolution = self.cfg.image_right_resolution
+        self.image_right_resolution = image_right_resolution if image_right_resolution is not None else self.cfg.image_right_resolution
 
         _keys = ["state", "action", "img_right", "ee_left", "ee_right", "q_left", "q_right"]
 
