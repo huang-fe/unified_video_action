@@ -50,14 +50,15 @@ dataset:
   seed: 42
   val_ratio: 0.02
   normalizer_type: all
-  dataset_path: data/realkinova_sharpa_hand/demo.zarr
+  dataset_path: data/teleop/robot/realkinova_sharpa_hand
+  human_dataset_path: data/teleop/human/realkinova_sharpa_hand
   dataset_type: singletask
   image_right_resolution: 256
 
 env_runner:
   _target_: unified_video_action.env_runner.teleop_image_runner.TeleopImageRunner
   arm_hand_name: realkinova_sharpa_hand
-  dataset_path: data/realkinova_sharpa_hand/demo.zarr
+  dataset_path: data/teleop/robot/realkinova_sharpa_hand/combined/demo.zarr
   fps: 10
   max_steps: 227
   n_action_steps: 8

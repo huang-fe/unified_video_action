@@ -62,10 +62,6 @@ def main(cfg: OmegaConf):
 
 
 def _inject_custom_args():
-    """Extract custom args before Hydra parses sys.argv, re-inject as Hydra overrides.
-
-    Usage: python train.py --config-name uva_realkinova_xhand --p_robot 0.7 --p_human 0.3 --human_dataset_path data/human
-    """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--p_robot", type=float, default=None)
     parser.add_argument("--p_human", type=float, default=None)
